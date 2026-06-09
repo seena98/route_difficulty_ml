@@ -77,6 +77,38 @@ We look at **30 different characteristics** of each street segment to evaluate i
 
 ---
 
+## 📖 Plain-English Glossary of Technical Terms
+
+If you do not have a technical background in AI or mapping systems, here are simple explanations for the terms used in this project:
+
+### Mapping & Geodata Terms
+*   **Node**: An intersection, junction, or endpoint on a map (represented by latitude and longitude coordinates).
+*   **Edge**: A single street segment that connects two nodes (intersections).
+*   **Directed Graph (Road Network)**: A math term for a map where streets can have direction (like one-way streets). In our system, Berlin is represented as a directed graph.
+*   **GraphML**: A standard text-based file format used to save map networks so that computers can load them instantly without redownloading them from the web.
+*   **Geocoding**: The process of taking a text address (like `"Schloss Charlottenburg"`) and looking up its exact GPS coordinates so the computer can plot it.
+*   **Nominatim API**: A free public search engine run by OpenStreetMap that performs geocoding lookups.
+*   **SRTM (Shuttle Radar Topography Mission)**: A global database of satellite-measured altitudes. We use it offline to find out how high each street is and calculate hills.
+
+### Machine Learning (AI) Terms
+*   **Machine Learning (ML)**: A type of AI where the computer looks at historical data (simulated driving logs) to find patterns and learn how to make predictions (route stress scores) on its own, rather than using fixed rules.
+*   **Random Forest**: An AI algorithm that works by creating hundreds of "decision trees" (like flowcharts). It asks questions about the road (width, slope) and the driver (experience) and averages their answers to predict stress.
+*   **XGBoost (Extreme Gradient Boosting)**: A high-performance AI algorithm. It works similarly to a Random Forest but builds decision trees one after another, with each new tree trying to fix the mistakes made by the previous ones.
+*   **Heuristic Baseline**: A simple, non-personalized rule-of-thumb model used for comparison. For example, our baseline simply assumes: *"steeper hills = harder road"* for everyone, ignoring the driver's age or vehicle width.
+*   **One-Hot Encoding**: A method used to translate words (like `"Compact"`, `"SUV"`, `"RV"`) into columns of `1`s and `0`s so that machine learning algorithms can calculate them.
+*   **Interaction Features / Terms**: Combining two inputs to help the AI learn complex rules. For example, multiplying `driver_age` by `is_night` tells the AI to look at age *specifically* when it is dark outside.
+
+### Evaluation Metrics (How we measure accuracy)
+*   **MAE (Mean Absolute Error)**: The average size of the model's prediction mistakes. A score of `0.22` means if the driver's true stress rating is `3.0`, the AI is off by an average of `0.22` (predicting around `2.78` or `3.22`). **Lower is better.**
+*   **RMSE (Root Mean Squared Error)**: Similar to MAE, but it penalizes larger mistakes much more heavily. A low RMSE means the model rarely makes huge errors. **Lower is better.**
+*   **R² Score (R-Squared)**: A percentage showing how much of the driver's stress variation is successfully explained by our model. A score of `0.91` (or `91%`) means our AI successfully explains 91% of why different drivers experience different stress levels, leaving only 9% to random chance. **Higher is better.**
+*   **Data Split Strategies (Random, User, Spatial)**: Ways to test if the AI is cheating or actually learning:
+    *   *Random Split*: We hide a random 20% of the driving logs, train on the remaining 80%, and see if the AI can predict the hidden ones.
+    *   *User Split*: We train the AI on 160 drivers and test it on 40 completely new drivers. This proves the AI generalized to *new people* it has never seen before.
+    *   *Spatial Split*: We train the AI on 80% of Berlin's streets and test it on 20% of roads in neighborhoods it has never visited. This proves the AI generalized to *new places*.
+
+---
+
 ## 🛠️ Interactive Feature Sensitivities (Sidebar Sliders)
 
 In the dashboard sidebar under **Custom Feature Sensitivities**, you can manually adjust sliders from `0.0` (ignore) to `3.0` (highly sensitive) to customize what makes driving hard:
@@ -88,11 +120,18 @@ In the dashboard sidebar under **Custom Feature Sensitivities**, you can manuall
 
 ## 🛣️ Route Selection & Driver Choice Dashboard
 
-When you select a start and end point in Berlin Mitte, the system calculates and displays **three distinct routes side-by-side**:
+When you select a start and end point in Berlin, the system calculates and displays **three distinct routes side-by-side**:
 
 1.  **Option 1: Shortest Path**: The standard routing that minimizes physical travel distance. This route often routes through narrow or congested segments because it ignores driver comfort, frequently leading to a **Hard/Difficult** or **Moderate Stress** rating.
 2.  **Option 2: Comfort-Optimized Path**: Sourced directly from our personalized machine learning models. By minimizing the personalized difficulty weight of each segment, it automatically routes around stressful bottlenecks, resulting in an **Easy Comfort** or **Moderate Stress** rating.
 3.  **Option 3: Alternative Bypass**: A third route option calculated by penalizing the segments of Options 1 & 2. This forces the pathfinder onto physically distinct roads to offer a clear alternative bypass.
+
+### 📍 Start & End Point Input Modes:
+Rather than being limited to a static list, you can select locations using four flexible input methods:
+*   **📍 Preset Landmarks**: Choose from 8 major landmarks in Berlin (e.g., Brandenburg Gate, Alexanderplatz, Hauptbahnhof) for quick testing.
+*   **🔍 Custom Address Search**: Type any location, address, or intersection name (e.g., `"Kurfürstendamm 100"`, `"Schloss Bellevue"`). The dashboard uses OpenStreetMap's Nominatim API to geocode the query and snap to the nearest road network node.
+*   **🌐 Coordinate Input**: Enter custom latitude and longitude coordinates directly (e.g. `52.5162`, `13.3777`).
+*   **🎲 Random Graph Nodes**: Automatically choose random node intersections from the loaded road network graph—highly useful for exploring the entire city map.
 
 ### Interactive Decision Features:
 *   **Difficulty Index Labels**: Every route option is assigned a clear overall difficulty rating:
@@ -103,6 +142,7 @@ When you select a start and end point in Berlin Mitte, the system calculates and
 *   **Street-by-Street Hazard Breakdown**: Below the map, expand the table to see a detailed analysis of every street segment on the selected route. It shows the length, slope, road width, surface type, and predicted difficulty index, along with a list of specific stress factors (e.g., "Narrow for vehicle width", "Steep slope", "Rough cobblestones").
 
 ---
+
 
 ## 📂 Project Structure
 
@@ -140,40 +180,129 @@ routeDifficulty/
 
 ## 🚀 How to Run the Project
 
-1.  **Set up the Virtual Environment**:
-    ```bash
-    # Create the environment
-    python3 -m venv venv
-    
-    # Activate the environment
-    source venv/bin/activate
-    
-    # Install dependencies
-    pip install -r requirements.txt
-    ```
+## 🚀 Detailed Step-by-Step Pipeline Execution Guide
 
-2.  **Download Map Data (Phase 2)**:
-    ```bash
-    python src/data_collection/downloader.py
-    ```
+To run the project or reproduce its results, follow this detailed guide. We execute the pipeline sequentially in six distinct phases.
 
-3.  **Run Simulation & Logs Generation (Phase 3)**:
-    ```bash
-    python src/simulation/driver_simulator.py
-    ```
+---
 
-4.  **Extract Features & Create Splits (Phase 4)**:
-    ```bash
-    python src/features/extractor.py
-    ```
+### Phase 1: Environment & Virtual Setup
 
-5.  **Train ML Models (Phase 5)**:
-    ```bash
-    python src/models/train.py
-    ```
+Before running the code, set up the Python virtual environment and install dependencies.
 
-6.  **Launch the Interactive Dashboard (Phase 6)**:
-    ```bash
-    streamlit run src/app/main.py
-    ```
-    Once launched, open your web browser and navigate to **`http://localhost:8501`** to interact with the map!
+1. **Create Virtual Environment**:
+   ```bash
+   python3 -m venv venv
+   ```
+2. **Activate the Environment**:
+   * On macOS / Linux:
+     ```bash
+     source venv/bin/activate
+     ```
+   * On Windows (Command Prompt):
+     ```cmd
+     venv\Scripts\activate.bat
+     ```
+3. **Install Dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+   * *What gets installed*: `osmnx` (map data), `geopandas` (spatial dataframes), `srtm.py` (offline elevation data), `xgboost` (gradient boosting), `scikit-learn` (machine learning utilities), `streamlit` (dashboard app), and `folium` (interactive leaflet maps).
+
+---
+
+### Phase 2: Map Data Collection & Slope Calculation
+
+In this phase, we fetch the physical road network of Berlin and integrate altitude elevation data to calculate road inclines (slopes).
+
+1. **Run Map Downloader Command**:
+   ```bash
+   python src/data_collection/downloader.py
+   ```
+2. **How it works under the hood**:
+   * **Graph Download**: The script queries OpenStreetMap using `osmnx` to download all drivable roads in Berlin, Germany. It yields a NetworkX directed graph containing node coordinates (latitude/longitude) and edge attributes (road type, lanes, speed limits, surface, one-way markers).
+   * **Elevation Integration**: To calculate slope gradients, it uses the offline Python `srtm` package to fetch elevation tiles. It queries the elevation (meters above sea level) for all 28,432 nodes in our Berlin graph.
+   * **Caching**: Checked and newly queried coordinates are saved to a local SQLite database at `data/elevation_cache.sqlite` to prevent duplicate fetches.
+   * **Slope Calculation**: For every directed street segment (edge) from node $u$ to node $v$, it computes the slope percentage using:
+     $$\text{Slope (\%)} = \left(\frac{\text{Elevation}_v - \text{Elevation}_u}{\text{Edge Length}}\right) \times 100$$
+   * **Save Output**: The preprocessed graph is saved in GraphML format at [berlin_mitte_drive.graphml](file:///Users/seena/VSCodePoject/routeDifficulty/data/berlin_mitte_drive.graphml).
+
+---
+
+### Phase 3: Traffic & Driver Commuting Simulation
+
+Because there is no open database of personalized driver stress levels, we run a heavy synthetic driving log simulator based on human behavioral research.
+
+1. **Run Driver Simulation Command**:
+   ```bash
+   python src/simulation/driver_simulator.py
+   ```
+2. **How it works under the hood**:
+   * **Driver Profiles**: It generates 200 driver profiles containing variables for age, experience (years), vehicle category, and baseline comfort sensitivities. Saved to [driver_profiles.csv](file:///Users/seena/VSCodePoject/routeDifficulty/data/driver_profiles.csv).
+   * **Commute Simulation**: It simulates **40 trips per driver** (8,000 total trips across Berlin). For each trip, it picks a random start and end intersection in the graph and routes them using the shortest distance.
+   * **Dynamic Traffic Congestion**: To simulate realistic commutes, traffic levels are dynamically calculated using diurnal curves based on peak rush hours (8 AM morning and 5 PM evening commutes).
+   * **Personalized Stress Formula**: As the driver traverses each segment, the simulator calculates a subjective stress rating ($1.0 - 5.0$) based on interactions between the driver's profile and the road characteristics. For example:
+     * *Narrow roads* (difference between road width and vehicle width) stress wide SUVs or RVs.
+     * *Cobblestone streets* stress lightweight compact cars.
+     * *Unlit streets at night* stress older drivers with reduced night vision.
+     * *Heavy traffic merges* stress inexperienced drivers (less than 2 years experience).
+   * **Save Output**: The simulator writes **898,656 segment-level driving logs** to [simulated_driving_logs.csv](file:///Users/seena/VSCodePoject/routeDifficulty/data/simulated_driving_logs.csv).
+
+---
+
+### Phase 4: Feature Engineering & Dataset Preparation
+
+This step prepares the raw driving logs for training by encoding attributes and engineering interaction terms.
+
+1. **Run Feature Extraction Command**:
+   ```bash
+   python src/features/extractor.py
+   ```
+2. **How it works under the hood**:
+   * **Categorical One-Hot Encoding**: Encodes text variables like road classification (`primary`, `residential`, etc.), vehicle category (`RV`, `Sedan`, etc.), and surface types (`asphalt`, `cobblestone`).
+   * **Cross-Interaction Features**: Constructs interaction features to help the model learn the personalization rules:
+     * `width_margin` = road width - vehicle width
+     * `experience_traffic` = driver experience $\times$ traffic factor
+     * `narrow_comfort_margin` = driver comfort sensitivity $\times$ width margin
+     * `night_vision_lit` = driver night vision $\times$ lit status $\times$ night flag
+     * `weight_slope` = vehicle weight $\times$ road slope
+   * **Data Splitting Strategy**: Generates three validation splits saved in `data/processed/` to strictly test model generalization:
+     * **Random Split**: Traditional 80/20 split on all records.
+     * **User-based Split**: Trains on 160 drivers and tests on 40 completely unseen drivers (proves generalization to new drivers).
+     * **Spatial Split**: Trains on 80% of road segments and tests on 20% of completely unseen roads (proves generalization to new neighborhoods).
+
+---
+
+### Phase 5: Machine Learning Model Training & Evaluation
+
+Here, we train the models, compare them against a baseline, and output the finalized weights.
+
+1. **Run Model Training Command**:
+   ```bash
+   python src/models/train.py
+   ```
+2. **How it works under the hood**:
+   * **Models Trained**: Fits a **Non-Personalized Heuristic Baseline** (using average gradients only), a **Random Forest Regressor** (100 estimators, max depth 16), and an **XGBoost Regressor** (100 estimators, max depth 7).
+   * **Evaluation**: Evaluates predictions on the three split test sets, computing Mean Absolute Error (MAE), Root Mean Squared Error (RMSE), and R² Score.
+   * **Save Outputs**:
+     * Exported model binaries: [best_rf_model.pkl](file:///Users/seena/VSCodePoject/routeDifficulty/data/best_rf_model.pkl) and [best_xgb_model.pkl](file:///Users/seena/VSCodePoject/routeDifficulty/data/best_xgb_model.pkl).
+     * Metric comparisons: `data/processed/model_evaluation_metrics.csv`.
+     * Feature importance visualization: `data/processed/feature_importances.png`.
+
+---
+
+### Phase 6: Launching the Interactive Web Dashboard
+
+Deploy the Streamlit web server to visualize the personalized routes on a Folium leaflet map.
+
+1. **Run Dashboard Command**:
+   ```bash
+   streamlit run src/app/main.py
+   ```
+2. **Interacting with the App**:
+   * Open the browser and visit **`http://localhost:8501`**.
+   * Configure the driver age, experience, and vehicle in the sidebar.
+   * Enter a custom search query (e.g. `"Kurfürstendamm 100"`) or select presets to set start/end locations.
+   * Compare the Shortest, Comfort-Optimized, and Alternative Bypass paths side-by-side.
+   * Review model accuracy metrics and feature importances at the bottom of the page!
+

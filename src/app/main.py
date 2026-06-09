@@ -7,6 +7,8 @@ import osmnx as ox
 import streamlit as st
 import folium
 from streamlit_folium import folium_static
+import requests
+import random
 
 # Config
 GRAPH_PATH = "data/berlin_mitte_drive.graphml"
@@ -39,7 +41,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 1. LANDMARKS FOR CENTRAL ROUTING IN BERLIN MITTE
+# 1. LANDMARKS FOR CENTRAL ROUTING IN BERLIN
 LANDMARKS = {
     "Brandenburg Gate": (52.516275, 13.377704),
     "Alexanderplatz (TV Tower)": (52.520815, 13.409419),
@@ -48,7 +50,18 @@ LANDMARKS = {
     "Checkpoint Charlie": (52.507443, 13.390391),
     "Victory Column (Siegessäule)": (52.514521, 13.350116),
     "Museum Island": (52.518625, 13.399587),
-    "Spandauer Vorstadt (Hackescher Markt)": (52.522851, 13.401912)
+    "Spandauer Vorstadt (Hackescher Markt)": (52.522851, 13.401912),
+    "Schloss Charlottenburg (Palace)": (52.521193, 13.295777),
+    "Kurfürstendamm (Shopping Avenue)": (52.503611, 13.329444),
+    "Tempelhofer Feld (Airport Park)": (52.473022, 13.401811),
+    "East Side Gallery (Berlin Wall)": (52.505018, 13.439703),
+    "Schloss Bellevue (Presidential Palace)": (52.521389, 13.350278),
+    "Kottbusser Tor (Kreuzberg Hub)": (52.499044, 13.418204),
+    "Treptower Park (Soviet Memorial)": (52.486221, 13.471602),
+    "Funkturm (Messe Berlin / Westend)": (52.504193, 13.279644),
+    "Botanischer Garten (Steglitz)": (52.458298, 13.306002),
+    "Ostbahnhof (East Station)": (52.510300, 13.434800),
+    "Gendarmenmarkt (Historic Square)": (52.513611, 13.392694)
 }
 
 @st.cache_resource
@@ -514,6 +527,32 @@ def compile_route_details(path, G_net, driver, hour):
         })
     return pd.DataFrame(rows)
 
+@st.cache_data(ttl=3600)
+def geocode_address(query):
+    """Geocode address query using Nominatim with a User-Agent."""
+    if not query:
+        return None
+    # Auto-append Berlin if not present to search locally
+    search_query = query
+    if "berlin" not in query.lower():
+        search_query = f"{query}, Berlin, Germany"
+        
+    try:
+        headers = {"User-Agent": "BerlinRouteDifficultyThesisApp/1.0 (contact: seena.student@hu-berlin.de)"}
+        url = "https://nominatim.openstreetmap.org/search"
+        params = {"q": search_query, "format": "json", "limit": 1}
+        response = requests.get(url, headers=headers, params=params, timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            if data:
+                lat = float(data[0]["lat"])
+                lon = float(data[0]["lon"])
+                display_name = data[0]["display_name"].split(",")[0]
+                return lat, lon, display_name
+    except Exception as e:
+        pass
+    return None
+
 def main():
     st.title("🚗 Personalized Navigation & Route Difficulty Predictor")
     st.caption("Master's Thesis Demonstration Area - Berlin Mitte, Germany")
@@ -654,20 +693,114 @@ def main():
         predict_edge_difficulties(G, driver, dep_hour, active_model, feature_cols, sensitivities)
         
     # --- MAIN PANEL: ROUTING SELECTION ---
-    col_sel1, col_sel2 = st.columns(2)
-    with col_sel1:
-        start_place = st.selectbox("Start Point", list(LANDMARKS.keys()), index=2) # Hauptbahnhof
-    with col_sel2:
-        end_place = st.selectbox("End Point", list(LANDMARKS.keys()), index=1) # Alexanderplatz
+    st.markdown("### 🗺️ Route Start & End Point Selection")
+    input_mode = st.radio(
+        "Select Location Input Mode",
+        ["📍 Preset Landmarks", "🔍 Custom Address Search", "🌐 Coordinate Input", "🎲 Random Graph Nodes"],
+        horizontal=True
+    )
+    
+    # Track random nodes in session state
+    if "rand_start_node" not in st.session_state:
+        st.session_state.rand_start_node = None
+    if "rand_end_node" not in st.session_state:
+        st.session_state.rand_end_node = None
         
-    if start_place == end_place:
-        st.warning("Start and End locations must be different.")
+    start_coords = None
+    end_coords = None
+    start_place = ""
+    end_place = ""
+    
+    if input_mode == "📍 Preset Landmarks":
+        col_sel1, col_sel2 = st.columns(2)
+        with col_sel1:
+            start_place = st.selectbox("Start Point", list(LANDMARKS.keys()), index=2) # Hauptbahnhof
+        with col_sel2:
+            end_place = st.selectbox("End Point", list(LANDMARKS.keys()), index=1) # Alexanderplatz
+        start_coords = LANDMARKS[start_place]
+        end_coords = LANDMARKS[end_place]
+        
+    elif input_mode == "🔍 Custom Address Search":
+        col_sel1, col_sel2 = st.columns(2)
+        with col_sel1:
+            start_query = st.text_input("Search Start Location", "Hauptbahnhof, Berlin")
+        with col_sel2:
+            end_query = st.text_input("Search End Location", "Alexanderplatz, Berlin")
+            
+        start_res = geocode_address(start_query)
+        end_res = geocode_address(end_query)
+        
+        if start_res is None:
+            st.error(f"Could not resolve start address: '{start_query}'. Using fallback.")
+            start_coords = LANDMARKS["Hauptbahnhof (Central Station)"]
+            start_place = "Hauptbahnhof (Fallback)"
+        else:
+            start_coords = (start_res[0], start_res[1])
+            start_place = start_res[2]
+            
+        if end_res is None:
+            st.error(f"Could not resolve end address: '{end_query}'. Using fallback.")
+            end_coords = LANDMARKS["Alexanderplatz (TV Tower)"]
+            end_place = "Alexanderplatz (Fallback)"
+        else:
+            end_coords = (end_res[0], end_res[1])
+            end_place = end_res[2]
+            
+    elif input_mode == "🌐 Coordinate Input":
+        col_sel1, col_sel2 = st.columns(2)
+        with col_sel1:
+            start_lat = st.number_input("Start Latitude", value=52.525010, format="%.6f")
+            start_lon = st.number_input("Start Longitude", value=13.369402, format="%.6f")
+        with col_sel2:
+            end_lat = st.number_input("End Latitude", value=52.520815, format="%.6f")
+            end_lon = st.number_input("End Longitude", value=13.409419, format="%.6f")
+        start_coords = (start_lat, start_lon)
+        end_coords = (end_lat, end_lon)
+        start_place = f"Custom ({start_lat:.4f}, {start_lon:.4f})"
+        end_place = f"Custom ({end_lat:.4f}, {end_lon:.4f})"
+        
+    elif input_mode == "🎲 Random Graph Nodes":
+        all_nodes = list(G.nodes())
+        if st.session_state.rand_start_node is None or st.session_state.rand_start_node not in G:
+            st.session_state.rand_start_node = random.choice(all_nodes)
+        if st.session_state.rand_end_node is None or st.session_state.rand_end_node not in G:
+            st.session_state.rand_end_node = random.choice(all_nodes)
+            while st.session_state.rand_end_node == st.session_state.rand_start_node:
+                st.session_state.rand_end_node = random.choice(all_nodes)
+                
+        col_rand1, col_rand2 = st.columns([3, 1])
+        with col_rand1:
+            st.markdown(f"📍 **Start Point**: Node `{st.session_state.rand_start_node}`")
+            st.markdown(f"🏁 **End Point**: Node `{st.session_state.rand_end_node}`")
+        with col_rand2:
+            if st.button("🎲 Generate New Random Locations", use_container_width=True):
+                st.session_state.rand_start_node = random.choice(all_nodes)
+                st.session_state.rand_end_node = random.choice(all_nodes)
+                while st.session_state.rand_end_node == st.session_state.rand_start_node:
+                    st.session_state.rand_end_node = random.choice(all_nodes)
+                st.rerun()
+                
+        start_coords = (G.nodes[st.session_state.rand_start_node]['y'], G.nodes[st.session_state.rand_start_node]['x'])
+        end_coords = (G.nodes[st.session_state.rand_end_node]['y'], G.nodes[st.session_state.rand_end_node]['x'])
+        start_place = f"Random Node {st.session_state.rand_start_node}"
+        end_place = f"Random Node {st.session_state.rand_end_node}"
+        
+    # Check boundaries warning
+    lats = [data['y'] for node, data in G.nodes(data=True)]
+    lons = [data['x'] for node, data in G.nodes(data=True)]
+    min_lat, max_lat = min(lats), max(lats)
+    min_lon, max_lon = min(lons), max(lons)
+    
+    margin = 0.03
+    for lat, lon, name in [(start_coords[0], start_coords[1], "Start"), (end_coords[0], end_coords[1], "End")]:
+        if not ((min_lat - margin <= lat <= max_lat + margin) and (min_lon - margin <= lon <= max_lon + margin)):
+            st.warning(f"⚠️ **Warning**: The {name} point ({lat:.4f}, {lon:.4f}) is outside our active Berlin graph bounding box. We will snap it to the nearest valid intersection.")
+            
+    if start_coords == end_coords:
+        st.error("Start and End locations must be different.")
         return
         
     # Find nearest nodes
-    start_coords = LANDMARKS[start_place]
-    end_coords = LANDMARKS[end_place]
-    
     start_node = ox.nearest_nodes(G, start_coords[1], start_coords[0])
     end_node = ox.nearest_nodes(G, end_coords[1], end_coords[0])
     
@@ -821,24 +954,32 @@ def main():
     
     m = folium.Map(location=[mid_lat, mid_lon], zoom_start=14, tiles="cartodbpositron")
     
-    # 1. Render all landmarks as markers
+    # 1. Render start and end markers
+    folium.Marker(
+        location=start_coords,
+        popup=f"Start: {start_place}",
+        tooltip=f"Start: {start_place}",
+        icon=folium.Icon(color="green", icon="play")
+    ).add_to(m)
+    
+    folium.Marker(
+        location=end_coords,
+        popup=f"End: {end_place}",
+        tooltip=f"End: {end_place}",
+        icon=folium.Icon(color="red", icon="stop")
+    ).add_to(m)
+    
+    # Render all preset landmarks as blue reference points (if not close to start/end)
     for name, coords in LANDMARKS.items():
-        color = "blue"
-        if name == start_place:
-            color = "green"
-            icon = "play"
-        elif name == end_place:
-            color = "red"
-            icon = "stop"
-        else:
-            icon = "info-sign"
-            
-        folium.Marker(
-            location=coords,
-            popup=name,
-            tooltip=name,
-            icon=folium.Icon(color=color, icon=icon)
-        ).add_to(m)
+        dist_start = np.sqrt((coords[0] - start_coords[0])**2 + (coords[1] - start_coords[1])**2)
+        dist_end = np.sqrt((coords[0] - end_coords[0])**2 + (coords[1] - end_coords[1])**2)
+        if dist_start > 0.001 and dist_end > 0.001:
+            folium.Marker(
+                location=coords,
+                popup=name,
+                tooltip=name,
+                icon=folium.Icon(color="blue", icon="info-sign")
+            ).add_to(m)
         
     # 2. Draw inactive routes as thin dashed lines for comparison
     inactive_paths = []
@@ -995,6 +1136,40 @@ def main():
                 *   Narrow Road Comfort: {driver['narrow_road_comfort']:.2f}
                 *   Night Vision Factor: {driver['night_vision']:.2f}
         """)
+
+    # --- MODEL PERFORMANCE & EVALUATION SECTION ---
+    st.markdown("---")
+    st.markdown("### 🤖 Machine Learning Model Performance & Evaluation")
+    
+    tab_metrics, tab_importance = st.tabs(["📊 Model Evaluation Metrics", "📈 Feature Importances"])
+    
+    with tab_metrics:
+        st.markdown("""
+            **Academic evaluation results** of the personalized difficulty models across three split strategies:
+            *   **Random Split**: Standard 80/20 train/test split.
+            *   **User Split**: Testing on unseen drivers (proves personalization generalizes to new drivers).
+            *   **Spatial Split**: Testing on unseen roads/neighborhoods (proves generalization to new geographical areas).
+        """)
+        
+        metrics_csv_path = "data/processed/model_evaluation_metrics.csv"
+        if os.path.exists(metrics_csv_path):
+            df_metrics = pd.read_csv(metrics_csv_path)
+            # Round numeric columns for cleaner display
+            df_metrics["MAE"] = df_metrics["MAE"].round(3)
+            df_metrics["RMSE"] = df_metrics["RMSE"].round(3)
+            df_metrics["R2"] = df_metrics["R2"].round(3)
+            st.dataframe(df_metrics, use_container_width=True, hide_index=True)
+        else:
+            st.warning("Model evaluation metrics file not found. Run model training first.")
+            
+    with tab_importance:
+        st.markdown("**Relative weight of features** in determining personalized driving difficulty:")
+        importance_img_path = "data/processed/feature_importances.png"
+        if os.path.exists(importance_img_path):
+            st.image(importance_img_path, caption="Feature Importances (XGBoost Regressor)", use_container_width=True)
+        else:
+            st.warning("Feature importance plot not found. Run model training first.")
+
 
 if __name__ == "__main__":
     main()

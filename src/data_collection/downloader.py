@@ -5,6 +5,7 @@ import osmnx as ox
 import networkx as nx
 import pandas as pd
 import numpy as np
+import srtm
 
 # Config
 DB_PATH = "data/elevation_cache.sqlite"
@@ -120,7 +121,7 @@ def fetch_elevations_from_api(coords_to_fetch):
     return results
 
 def add_elevations_to_graph(G):
-    """Query and assign elevation to all nodes in the OSMnx graph."""
+    """Query and assign elevation to all nodes in the OSMnx graph using offline SRTM data."""
     nodes = list(G.nodes(data=True))
     coords = [(data['y'], data['x']) for _, data in nodes]
     
@@ -138,12 +139,25 @@ def add_elevations_to_graph(G):
     # Remove duplicates from missing list
     missing_coords = list(set(missing_coords))
     
-    # 3. Query missing coords from API
+    # 3. Query missing coords using srtm
     new_elevations = {}
     if missing_coords:
-        new_elevations = fetch_elevations_from_api(missing_coords)
-        save_elevations_to_cache(new_elevations)
-        print(f"Saved {len(new_elevations)} new elevations to local cache.")
+        print(f"Loading offline SRTM elevation data for {len(missing_coords)} coordinates...")
+        try:
+            srtm_data = srtm.get_data()
+            for lat, lon in missing_coords:
+                elevation = srtm_data.get_elevation(lat, lon)
+                if elevation is None:
+                    elevation = BERLIN_DEFAULT_ELEVATION
+                new_elevations[(round(lat, 6), round(lon, 6))] = float(elevation)
+            
+            # Save new ones to cache
+            save_elevations_to_cache(new_elevations)
+            print(f"Retrieved and cached {len(new_elevations)} elevations from local SRTM.")
+        except Exception as e:
+            print(f"SRTM local error: {e}. Falling back to default elevations.")
+            for lat, lon in missing_coords:
+                new_elevations[(round(lat, 6), round(lon, 6))] = BERLIN_DEFAULT_ELEVATION
         
     # Combine results
     all_elevations = {**cached, **new_elevations}
@@ -188,7 +202,7 @@ def download_and_process_berlin_mitte():
     init_cache_db()
     
     # Query boundary
-    place_name = "Mitte, Berlin, Germany"
+    place_name = "Berlin, Germany"
     print(f"Downloading drivable road network for: {place_name}...")
     
     try:
