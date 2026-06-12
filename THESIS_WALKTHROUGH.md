@@ -72,21 +72,24 @@ Here we explain the detailed code implementation, function-by-function, for each
 
 ```mermaid
 flowchart TD
-    A["1. Downloader (downloader.py)"] --> B["2. Simulator (driver_simulator.py)"]
-    B --> C["3. Extractor (extractor.py)"]
-    C --> D["4. Training (train.py)"]
-    D --> E["5. Dashboard (main.py)"]
+    A["1. Downloader (src/data_collection/downloader.py)"] --> B["2. Simulator (src/simulation/driver_simulator.py)"]
+    B --> C["3. Extractor (src/features/extractor.py)"]
+    C --> D["4. Training (src/models/train.py)"]
+    D --> E["5. Dashboard (src/app/main.py)"]
 ```
 
-### Phase 1: Map Data Collection & Processing (`downloader.py`)
+### Phase 1: Map Data Collection & Processing (`src/data_collection/downloader.py` & `src/data_collection/verify_osmnx.py`)
 
 #### Simple Explanation:
 Before we can route a car, we need a mathematical map of the roads. We wrote code to download the entire drivable street layout of Berlin. However, a flat 2D map isn't enough. A flat road is easy to drive on, but a steep 15% incline hill is stressful, especially for heavy vehicles. 
 
 To fix this, the script asks the "Open-Elevation API" (a web service) for the exact altitude of every single intersection in Berlin. If the web service goes offline, it seamlessly switches to offline satellite data (SRTM) as a backup. By knowing the exact height of two connected intersections and the physical length of the road between them, the code uses simple trigonometry to calculate the "slope" (steepness) of every road segment. Finally, it saves this enriched, 3D-aware map into a file called `berlin_mitte_drive.graphml` (which contains the vast network of roads allowing routing across the city).
 
+We also created a sanity check script called `src/data_collection/verify_osmnx.py` which downloads a tiny drivable network around the Brandenburg Gate, saves it as a GraphML file, and verifies that `osmnx` is installed and functioning correctly on the system.
+
 #### Technical Logic & Code Functions:
 This script handles the raw map collection and integrates NASA Shuttle Radar Topography Mission (SRTM) elevation data to compute street slopes.
+*   `verify_osmnx.py` (Verification Utility): Downloads a 500-meter graph around the Brandenburg Gate and saves it to `data/temp/test_network.graphml` to ensure the mapping environment is functioning.
 *   `init_cache_db()`: Initializes a local SQLite database `data/elevation_cache.sqlite` with a table `elevation_cache (lat REAL, lon REAL, elevation REAL, PRIMARY KEY)`. This local database stores queried elevations to prevent repeating slow web API requests.
 *   `get_cached_elevations(coords)`: Queries the cache in chunks of 999 (to avoid SQLite parameter limits) to find already resolved latitude/longitude points.
 *   `save_elevations_to_cache(elevation_data)`: Saves newly queried elevations in batch to the cache.
@@ -105,7 +108,7 @@ This script handles the raw map collection and integrates NASA Shuttle Radar Top
 
 ---
 
-### Phase 2: The Traffic Psychology Matrix (`driver_simulator.py`)
+### Phase 2: The Traffic Psychology Matrix (`src/simulation/driver_simulator.py`)
 
 #### Simple Explanation: Why Did We Simulate Data?
 To train an AI to understand stress, you need a dataset that says: *"Driver X (age 20, novice) drove on Street Y (narrow, cobblestone) and felt a stress level of 4.5."* **This data does not exist in the real world.** We cannot easily attach heart-rate monitors to tens of thousands of drivers across Berlin, tracking their exact vehicle specs for every street. 
@@ -144,7 +147,7 @@ This script simulates a population of drivers traversing the map under varying p
 
 ---
 
-### Phase 3: The Mathematics of AI Preparation (`extractor.py`)
+### Phase 3: The Mathematics of AI Preparation (`src/features/extractor.py`)
 
 #### Simple Explanation: Helping the AI Understand
 Raw data isn't always easy for an AI to understand. **Feature Engineering** is the art of taking raw data points and mathematically combining them into more meaningful clues before giving them to the AI. For example, giving the AI the car's width and the road's width separately forces the AI to figure out how they relate. Instead, we do the math for the AI: we subtract the car's width from the road's width to create a "Width Margin." 
@@ -170,7 +173,7 @@ This script prepares the dataset for machine learning by converting categorical 
 
 ---
 
-### Phase 4: Model Training & Evaluation (`train.py`)
+### Phase 4: Model Training & Evaluation (`src/models/train.py`)
 
 #### Simple Explanation: Why We Chose Advanced AI Models
 Why not just use a simple mathematical formula (like "add +1 stress for every hill")? Because human stress is incredibly complex and non-linear. What if it's a hill, but it's a wide road, during the day, and the driver is a 40-year veteran driving a compact car? A simple formula breaks down. 
@@ -208,7 +211,7 @@ This script fits our regressors and evaluates them across the three validation s
 
 ---
 
-### Phase 5: Interactive Dashboard & Real-Time Routing (`main.py`)
+### Phase 5: Interactive Dashboard & Real-Time Routing (`src/app/main.py`)
 
 #### Simple Explanation: Under the Hood of the User Interface
 The Streamlit dashboard is the interactive website where anyone can test the complex AI model without having to write code. It acts as the face of the navigation system. 
