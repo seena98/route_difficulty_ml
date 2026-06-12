@@ -273,17 +273,17 @@ Here are the exact accuracy scores achieved by the models on the full Berlin net
 
 *(Reminder: MAE and RMSE measure the physical size of the AI's mistakes, so lower is better. R² measures the AI's overall accuracy, so higher is better).*
 
-| Split Strategy | Model | MAE (Lower is Better) | RMSE (Lower is Better) | R² Score (Higher is Better) |
+| Split | Model | MAE | RMSE | R2 |
 | :--- | :--- | :---: | :---: | :---: |
-| **Random Split** | Baseline (Road-Only) | 0.384 | 0.560 | 0.698 (69.8%) |
-| | **Random Forest (Personalized)** | **0.221** | **0.307** | **0.909 (90.9%)** |
-| | XGBoost (Personalized) | 0.225 | 0.311 | 0.907 (90.7%) |
-| **User Split (New Drivers)** | Baseline (Road-Only) | 0.370 | 0.524 | 0.633 (63.3%) |
-| | **Random Forest (Personalized)** | **0.231** | **0.317** | **0.866 (86.6%)** |
-| | XGBoost (Personalized) | 0.236 | 0.320 | 0.863 (86.3%) |
-| **Spatial Split (New Neighborhoods)** | Baseline (Road-Only) | 0.420 | 0.591 | 0.661 (66.1%) |
-| | Random Forest (Personalized) | 0.239 | 0.332 | 0.893 (89.3%) |
-| | **XGBoost (Personalized)** | **0.240** | **0.330** | **0.894 (89.4%)** |
+| random | Baseline (Road-Only) | 0.384 | 0.56 | 0.698 |
+| random | Random Forest (Personalized) | 0.221 | 0.307 | 0.909 |
+| random | XGBoost (Personalized) | 0.225 | 0.311 | 0.907 |
+| user_split | Baseline (Road-Only) | 0.37 | 0.524 | 0.633 |
+| user_split | Random Forest (Personalized) | 0.231 | 0.317 | 0.866 |
+| user_split | XGBoost (Personalized) | 0.236 | 0.32 | 0.863 |
+| spatial_split | Baseline (Road-Only) | 0.42 | 0.591 | 0.661 |
+| spatial_split | Random Forest (Personalized) | 0.239 | 0.332 | 0.893 |
+| spatial_split | XGBoost (Personalized) | 0.24 | 0.33 | 0.894 |
 
 ### Detailed Column Descriptions
 
