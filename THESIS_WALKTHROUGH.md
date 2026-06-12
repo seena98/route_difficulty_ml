@@ -171,7 +171,21 @@ This script prepares the dataset for machine learning by converting categorical 
 #### Simple Explanation: Why We Chose Advanced AI Models
 Why not just use a simple mathematical formula (like "add +1 stress for every hill")? Because human stress is incredibly complex and non-linear. What if it's a hill, but it's a wide road, during the day, and the driver is a 40-year veteran driving a compact car? A simple formula breaks down. 
 
-**Machine Learning (ML)** algorithms are exceptionally good at discovering these hidden, complex patterns across millions of data points without us having to write thousands of manual rules. We chose two advanced, state-of-the-art models called "Random Forest" and "XGBoost" because they build complex decision flowcharts and are highly accurate at tabular data prediction. Once the AI finishes "learning", we save its "brain" into lightweight `.pkl` files so our dashboard can load the intelligence instantly.
+**Machine Learning (ML)** algorithms are exceptionally good at discovering these hidden, complex, and non-linear patterns across millions of data points without us having to write thousands of manual rules. In this thesis, we utilized and compared three distinct modeling paradigms:
+
+1. **Heuristic Baseline (Non-Personalized Control):**
+   * *What it is:* A simple rule-based approach that ignores the driver's unique characteristics and evaluates difficulty based purely on raw road features (such as gradient/slope).
+   * *Why we used it:* It acts as our experimental control. By comparing our personalized models to this baseline, we can mathematically prove whether personalization actually improves route difficulty estimation.
+
+2. **Random Forest Regressor (Personalized):**
+   * *What it is:* An ensemble learning method that builds a "forest" of 100 individual decision trees and averages their predictions.
+   * *Why we used it:* Random Forest is exceptionally robust against overfitting and handles highly correlated variables (collinearity) well. It performs incredibly well at capturing non-linear driver-vehicle-environment interactions (such as how driver experience mitigates traffic congestion stress).
+
+3. **XGBoost Regressor (Personalized):**
+   * *What it is:* An advanced gradient-boosted decision tree algorithm that builds trees sequentially, with each new tree correcting the errors of the previous ones.
+   * *Why we used it:* XGBoost is highly optimized for tabular data and is famous for its predictive accuracy. It generalizes exceptionally well to unseen environments (as proven by our Spatial Validation split), learning complex residual stress patterns that a standard Random Forest might smooth out.
+
+Once these models finish training, their "brains" are saved as lightweight binary `.pkl` files so the Streamlit dashboard can perform instant predictions in real-time.
 
 #### Technical Logic & Code Functions:
 This script fits our regressors and evaluates them across the three validation splits.
@@ -267,3 +281,43 @@ Here are the exact accuracy scores achieved by the models on the full Berlin net
 1.  **Baseline vs. Personalized**: In all tests, the "Baseline" model (which ignores the driver and only looks at the road) only achieves ~65% accuracy. By adding the driver's profile and vehicle specs, the AI's accuracy skyrockets to **~90%**. This proves the entire premise of our thesis: you cannot predict how stressful a route is just by looking at the road geometry. You *must* personalize it to the driver.
 2.  **User Split (86.6% R²)**: This proves the AI isn't just memorizing data. When we tested the AI on virtual drivers it had never seen before during training, it still achieved 86.6% accuracy.
 3.  **Spatial Split (89.4% R²)**: This proves the AI can generalize to completely new neighborhoods and roads. The system can accurately predict stress scores on streets it has never visited during training. This means the AI is robust enough that it could potentially be deployed in a brand new city entirely without retraining from scratch.
+
+---
+
+## 💾 7. Git Large File Storage (LFS) Configuration
+
+Because our machine learning models contain millions of parameters, their file sizes can be very large. Specifically:
+* **XGBoost Model (`best_xgb_model.pkl`):** ~900 KB (small and easily tracked by standard Git).
+* **Random Forest Model (`best_rf_model.pkl`):** **181.3 MB** (exceeds GitHub's strict 100 MB file limit).
+
+To deploy the app to Streamlit Sharing without running into upload errors or missing models, the repository is configured to use **Git Large File Storage (LFS)**.
+
+### What is Git LFS?
+Git LFS replaces large binary files (like `.pkl` models or heavy graphs) with lightweight text pointer files inside GitHub. When Streamlit builds or deploys the app, it automatically reads these pointer files and downloads the actual heavy model files from the Git LFS storage servers.
+
+### How Git LFS is Configured in this Repository
+1. **The `.gitattributes` File:**
+   We created a [.gitattributes](file:///Users/seena/VSCodePoject/routeDifficulty/.gitattributes) file in the root of the project to tell Git to manage `.pkl` models using LFS instead of tracking their raw binary changes:
+   ```text
+   data/best_rf_model.pkl filter=lfs diff=lfs merge=lfs -text
+   ```
+2. **The `.gitignore` File:**
+   We updated [.gitignore](file:///Users/seena/VSCodePoject/routeDifficulty/.gitignore) to ensure that `data/best_rf_model.pkl` is un-ignored (`!data/best_rf_model.pkl`) so that Git is allowed to track and manage it via LFS.
+
+### Commands to Setup Git LFS Locally
+If you clone this repository on a new machine or need to push updates to the model:
+
+```bash
+# 1. Install Git LFS on your system (macOS example via Homebrew)
+brew install git-lfs
+
+# 2. Set up Git LFS on your local user account
+git lfs install
+
+# 3. Add and commit the tracked files
+git add .gitignore .gitattributes data/best_rf_model.pkl
+git commit -m "Track Random Forest model via Git LFS"
+
+# 4. Push to remote
+git push origin main
+```
