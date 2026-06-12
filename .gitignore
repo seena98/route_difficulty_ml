@@ -13,6 +13,7 @@ __pycache__/
 data/*
 !data/berlin_mitte_drive.graphml
 !data/best_xgb_model.pkl
+!data/best_rf_model.pkl
 !data/processed/
 data/processed/*
 !data/processed/feature_list.txt
