@@ -582,9 +582,20 @@ def main():
     
     dep_hour = st.sidebar.slider("Departure Hour (Traffic peak hours: 8 & 17)", 0, 23, 14)
     
+    # Check which models loaded successfully to handle missing files on cloud deploys
+    available_models = []
+    if model_xgb is not None:
+        available_models.append("XGBoost Regressor (Personalized)")
+    if model_rf is not None:
+        available_models.append("Random Forest (Personalized)")
+    available_models.append("Heuristic Baseline (Non-Personalized)")
+    
+    if not available_models:
+        available_models = ["Heuristic Baseline (Non-Personalized)"]
+        
     model_type = st.sidebar.radio(
         "Predictive Model Selection",
-        ["XGBoost Regressor (Personalized)", "Random Forest (Personalized)", "Heuristic Baseline (Non-Personalized)"]
+        available_models
     )
     
     st.sidebar.markdown("---")

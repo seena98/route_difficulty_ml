@@ -306,3 +306,47 @@ Deploy the Streamlit web server to visualize the personalized routes on a Folium
    * Compare the Shortest, Comfort-Optimized, and Alternative Bypass paths side-by-side.
    * Review model accuracy metrics and feature importances at the bottom of the page!
 
+---
+
+## 🌐 Deploying to Streamlit Community Cloud (Free Hosting)
+
+You can deploy this interactive ML navigation dashboard to the web for free using **Streamlit Community Cloud**.
+
+### ⚠️ Crucial Step: Handling GitHub File Size Limits (100 MB)
+GitHub has a strict file size limit of **100 MB** for pushes. 
+* Your trained Random Forest model (`data/best_rf_model.pkl`) is **~108 MB** and cannot be pushed to standard GitHub repositories without Git LFS (Large File Storage).
+* To resolve this, **do not push `data/best_rf_model.pkl` to GitHub**. 
+* The dashboard is dynamically coded to check which models are available on disk. If the Random Forest pickle is missing, it will automatically hide it and let users run the lightweight **XGBoost Regressor** (`data/best_xgb_model.pkl` which is < 1 MB) or the **Heuristic Baseline** with no crashes!
+
+### Step-by-Step Deployment Guide
+
+1. **Create a GitHub Repository**:
+   * Create a new public repository on GitHub (e.g., `route-difficulty-navigation`).
+
+2. **Commit and Push the Code**:
+   * Initialize Git in your project folder, add your remote, and push:
+     ```bash
+     git init
+     # Add the heavy RF model to gitignore to prevent upload failures
+     echo "data/best_rf_model.pkl" >> .gitignore
+     git add .
+     git commit -m "Initialize Personalized Navigation Dashboard"
+     git branch -M main
+     git remote add origin https://github.com/your-username/your-repo-name.git
+     git push -u origin main
+     ```
+
+3. **Sign Up for Streamlit Community Cloud**:
+   * Visit [share.streamlit.io](https://share.streamlit.io/).
+   * Click **Sign Up** and select **Continue with GitHub** to connect your account.
+
+4. **Deploy the App**:
+   * Click the **New app** button.
+   * Configure the deploy settings:
+     * **Repository**: Select your newly created repository (e.g., `your-username/route-difficulty-navigation`).
+     * **Branch**: `main`
+     * **Main file path**: `src/app/main.py`
+   * Click **Deploy!**
+
+Streamlit will read your `requirements.txt`, install dependencies, load the cached Berlin graph, and launch the application on a public `*.streamlit.app` link.
+
