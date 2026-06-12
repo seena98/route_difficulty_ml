@@ -269,6 +269,15 @@ In the main panel, under the **"Select Location Input Mode"** toggle, you can ro
 ### The Street-by-Street Route Breakdown
 After selecting a route, the dashboard generates a table that lists every single street segment of your trip. Instead of just showing the name, it explains exactly *why* a street is stressful. It will explicitly tell you if a segment was flagged for a "Narrow road margin", "Steep incline", or "Tram tracks on road," allowing the driver to review the journey before they put the car in drive.
 
+### Turn-by-Turn Navigation Simulator & Driver HUD
+When analyzing a route option, you can click the button labeled **"Accept and Launch Turn-by-Turn Navigation"**.
+*   *What it does:* Clicking this button transitions the dashboard into a dedicated **Driver HUD Mode** that tracks your journey segment-by-segment in real-time.
+    *   **Interactive Vehicle Marker:** Overlays a blue locator pin on the Folium Map, dynamically centering the map and zooming in on your current simulated vehicle position.
+    *   **Dynamic HUD Metrics:** Recalculates and displays remaining travel distance (km) and estimated travel time (mins) dynamically as you progress.
+    *   **Segment stress warnings:** Displays the current street name, length, difficulty classification (Green/Yellow/Red), and specific stress factors (e.g. narrow width, steep slope, tram tracks) for the active segment.
+    *   **Simulation Controls:** Provides interactive buttons to go to the `Next Step`, `Restart Route`, or `Exit Navigation` to return to the planner.
+*   *Why it is modeled:* While commercial implementations would transmit the calculated path coordinates via API to a physical in-car screen (CarPlay/Android Auto) or mobile app, this built-in simulation allows users and thesis reviewers to test the route quality interactively and see exactly how segment difficulties unfold during traversal.
+
 ---
 
 ## 📈 6. Chapter 4: Machine Learning Model Performance Metrics

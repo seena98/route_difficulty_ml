@@ -717,6 +717,14 @@ def main():
     if "rand_end_node" not in st.session_state:
         st.session_state.rand_end_node = None
         
+    # Track navigation state
+    if "navigation_active" not in st.session_state:
+        st.session_state.navigation_active = False
+    if "navigation_route_name" not in st.session_state:
+        st.session_state.navigation_route_name = "Comfort-Optimized"
+    if "navigation_step_idx" not in st.session_state:
+        st.session_state.navigation_step_idx = 0
+        
     start_coords = None
     end_coords = None
     start_place = ""
@@ -943,27 +951,47 @@ def main():
         "🎯 Select Route Option to Highlight and Analyze Detailed Streets:",
         ["Option 1: Shortest Path", "Option 2: Comfort-Optimized Path", "Option 3: Alternative Bypass Path"],
         horizontal=True,
-        index=1 # Default to Comfort path
+        index=0 if "Shortest" in st.session_state.navigation_route_name else 1 if "Comfort" in st.session_state.navigation_route_name else 2,
+        disabled=st.session_state.navigation_active
     )
     
     # Set active path
-    if "Option 1" in selected_opt:
-        active_path = path_distance
-        active_label = "Shortest Path"
-    elif "Option 2" in selected_opt:
-        active_path = path_comfort
-        active_label = "Comfort-Optimized"
+    if st.session_state.navigation_active:
+        if "Shortest" in st.session_state.navigation_route_name:
+            active_path = path_distance
+            active_label = "Shortest Path"
+        elif "Comfort" in st.session_state.navigation_route_name:
+            active_path = path_comfort
+            active_label = "Comfort-Optimized"
+        else:
+            active_path = path_bypass
+            active_label = "Alternative Bypass"
     else:
-        active_path = path_bypass
-        active_label = "Alternative Bypass"
+        if "Option 1" in selected_opt:
+            active_path = path_distance
+            active_label = "Shortest Path"
+        elif "Option 2" in selected_opt:
+            active_path = path_comfort
+            active_label = "Comfort-Optimized"
+        else:
+            active_path = path_bypass
+            active_label = "Alternative Bypass"
         
     # --- RENDER MAPS WITH COLOR-CODED SEGMENTS ---
-    # Center map on active route
-    mid_node = active_path[len(active_path)//2]
-    mid_lat = G.nodes[mid_node]['y']
-    mid_lon = G.nodes[mid_node]['x']
-    
-    m = folium.Map(location=[mid_lat, mid_lon], zoom_start=14, tiles="cartodbpositron")
+    # Center map on active route or current vehicle position
+    if st.session_state.navigation_active:
+        current_node_idx = min(st.session_state.navigation_step_idx, len(active_path) - 1)
+        current_node = active_path[current_node_idx]
+        map_lat = G.nodes[current_node]['y']
+        map_lon = G.nodes[current_node]['x']
+        zoom_val = 16
+    else:
+        mid_node = active_path[len(active_path)//2]
+        map_lat = G.nodes[mid_node]['y']
+        map_lon = G.nodes[mid_node]['x']
+        zoom_val = 14
+        
+    m = folium.Map(location=[map_lat, map_lon], zoom_start=zoom_val, tiles="cartodbpositron")
     
     # 1. Render start and end markers
     folium.Marker(
@@ -979,6 +1007,20 @@ def main():
         tooltip=f"End: {end_place}",
         icon=folium.Icon(color="red", icon="stop")
     ).add_to(m)
+    
+    # 1b. Render current vehicle position marker if active navigation is active
+    if st.session_state.navigation_active:
+        current_node_idx = min(st.session_state.navigation_step_idx, len(active_path) - 1)
+        current_node = active_path[current_node_idx]
+        vehicle_lat = G.nodes[current_node]['y']
+        vehicle_lon = G.nodes[current_node]['x']
+        
+        folium.Marker(
+            location=[vehicle_lat, vehicle_lon],
+            popup=f"🚗 Vehicle Location (Segment {current_node_idx + 1} of {len(active_path) - 1})",
+            tooltip="Current Position",
+            icon=folium.Icon(color="blue", icon="info-sign")
+        ).add_to(m)
     
     # Render all preset landmarks as blue reference points (if not close to start/end)
     for name, coords in LANDMARKS.items():
@@ -1061,10 +1103,13 @@ def main():
     st.markdown(f"### 🗺️ Route Visual Map - Highlighting **{active_label}** (Green = Easy, Orange = Moderate, Red = Stressful)")
     folium_static(m, width=1100, height=550)
     
-    # --- DRIVER CHOICE CONFIRMATION PANEL ---
+    # --- DRIVER CHOICE CONFIRMATION / ACTIVE NAVIGATION PANEL ---
     st.markdown("---")
-    st.markdown("### 🗺️ Driver Choice Confirmation")
-    
+    if st.session_state.navigation_active:
+        st.markdown("### 🗺️ 🚗 Active Turn-by-Turn Navigation HUD")
+    else:
+        st.markdown("### 🗺️ Driver Choice Confirmation")
+        
     # Selected metrics
     if "Option 1" in selected_opt:
         selected_metrics = metrics_distance
@@ -1075,25 +1120,161 @@ def main():
         
     confirm_col1, confirm_col2 = st.columns([2, 1])
     
-    with confirm_col1:
-        st.markdown(f"You are currently analyzing the **{active_label}** route.")
-        st.markdown(f"• **Overall Difficulty Index**: {selected_metrics['avg_diff']:.2f} / 5.0 ({selected_metrics['label']})")
-        st.markdown(f"• **Total Travel Distance**: {selected_metrics['length_km']:.2f} km")
-        st.markdown(f"• **Estimated Travel Time**: {selected_metrics['time_min']:.1f} mins")
+    if st.session_state.navigation_active:
+        # NAVIGATION IS ACTIVE
+        current_step = st.session_state.navigation_step_idx
+        total_steps = len(active_path) - 1
         
-        choice_btn = st.button(f"🚗 Accept and Launch Turn-by-Turn Navigation ({active_label})", use_container_width=True)
-        if choice_btn:
-            st.toast("Starting Navigation...", icon="🚗")
-            st.balloons()
-            st.success(f"🎉 **Navigation Started!** Sent route details for **{active_label}** to your in-car display. Safe travels!")
+        # Calculate remaining stats dynamically
+        remaining_length_m = 0
+        remaining_time_sec = 0
+        for idx in range(current_step, total_steps):
+            u_node, v_node = active_path[idx], active_path[idx+1]
+            edge_data = G.get_edge_data(u_node, v_node)[0]
+            remaining_length_m += float(edge_data.get("length", 10.0))
             
-    with confirm_col2:
-        st.metric(
-            label="Overall Route Stress Score",
-            value=f"{selected_metrics['avg_diff']:.2f} / 5.0",
-            delta="Optimal Comfort" if "Comfort" in active_label else ("Non-Personalized" if "Shortest" in active_label else "Alternative Bypass"),
-            delta_color="normal" if "Comfort" in active_label else "off"
-        )
+            road_class = edge_data.get("highway", "residential")
+            if isinstance(road_class, list):
+                road_class = road_class[0]
+            traffic = get_traffic_factor_ui(road_class, dep_hour)
+            
+            maxspeed_val = edge_data.get("maxspeed", "50")
+            if isinstance(maxspeed_val, list):
+                maxspeed_val = maxspeed_val[0]
+            try:
+                speed_limit = float(maxspeed_val.replace("DE:urban", "50").replace("DE:zone:30", "30"))
+            except:
+                speed_limit = 50.0
+            actual_speed_mps = (speed_limit / 3.6) / traffic
+            remaining_time_sec += float(edge_data.get("length", 10.0)) / max(1.0, actual_speed_mps)
+            
+        remaining_length_km = remaining_length_m / 1000.0
+        remaining_time_min = remaining_time_sec / 60.0
+        
+        with confirm_col1:
+            if current_step < total_steps:
+                u_node, v_node = active_path[current_step], active_path[current_step+1]
+                edge_data = G.get_edge_data(u_node, v_node)[0]
+                
+                street_name = edge_data.get("name", "Unnamed Street")
+                if isinstance(street_name, list):
+                    street_name = " / ".join([str(s) for s in street_name])
+                    
+                length = float(edge_data.get("length", 10.0))
+                difficulty = float(edge_data.get("predicted_difficulty", 1.0))
+                slope = float(edge_data.get("slope", 0.0))
+                surface = edge_data.get("surface", "asphalt")
+                if isinstance(surface, list):
+                    surface = surface[0]
+                road_class = edge_data.get("highway", "residential")
+                if isinstance(road_class, list):
+                    road_class = road_class[0]
+                traffic = get_traffic_factor_ui(road_class, dep_hour)
+                
+                if difficulty < 2.0:
+                    diff_label = "🟢 Easy Comfort"
+                elif difficulty < 3.2:
+                    diff_label = "🟡 Moderate Stress"
+                else:
+                    diff_label = "🔴 Hard/Difficult"
+                    
+                # Determine warnings
+                reasons = []
+                width_val = edge_data.get("width", None)
+                if isinstance(width_val, list):
+                    width_val = width_val[0]
+                try:
+                    road_width = float(width_val) if width_val else None
+                except:
+                    road_width = None
+                if not road_width:
+                    width_defaults = {
+                        "motorway": 12.0, "primary": 8.5, "secondary": 7.0,
+                        "tertiary": 6.0, "residential": 4.5, "living_street": 3.5
+                    }
+                    road_width = width_defaults.get(road_class, 5.0)
+                    
+                if road_width - v_width < 1.0:
+                    reasons.append("Narrow width")
+                if abs(slope) > 4.0:
+                    reasons.append(f"Steep incline ({slope:.1f}%)")
+                if surface == "cobblestone":
+                    reasons.append("Cobblestones")
+                if traffic > 2.0:
+                    reasons.append(f"Heavy traffic congestion ({traffic:.1f}x)")
+                if "railway" in edge_data or edge_data.get("railway") == "tram":
+                    reasons.append("Tram tracks")
+                reasons_str = ", ".join(reasons) if reasons else "Clear & smooth flow"
+                
+                st.markdown(f"### 📍 Current Segment: **{street_name}**")
+                st.markdown(f"• **Segment Difficulty**: **{difficulty:.2f} / 5.0** ({diff_label})")
+                st.markdown(f"• **Length**: {int(length)} meters")
+                st.markdown(f"• **Conditions**: {reasons_str}")
+                
+                # Progress bar
+                progress_val = float(current_step) / float(total_steps)
+                st.progress(progress_val)
+                st.caption(f"Segment {current_step + 1} of {total_steps} | {int(progress_val * 100)}% Completed")
+                
+                # Simulation Control Buttons
+                nav_control1, nav_control2, nav_control3 = st.columns(3)
+                with nav_control1:
+                    if st.button("➡️ Simulate Next Step", use_container_width=True):
+                        st.session_state.navigation_step_idx += 1
+                        st.toast(f"Moving to next segment...", icon="🚗")
+                        st.rerun()
+                with nav_control2:
+                    if st.button("⏮️ Restart Route", use_container_width=True):
+                        st.session_state.navigation_step_idx = 0
+                        st.toast("Route restarted.", icon="🔄")
+                        st.rerun()
+                with nav_control3:
+                    if st.button("⏹️ Exit Navigation", use_container_width=True):
+                        st.session_state.navigation_active = False
+                        st.session_state.navigation_step_idx = 0
+                        st.toast("Navigation ended.", icon="⏹️")
+                        st.rerun()
+            else:
+                st.balloons()
+                st.success("🏁 **Destination Reached!** You have safely and comfortably completed your journey.")
+                if st.button("🏁 End & Return to Planner", use_container_width=True):
+                    st.session_state.navigation_active = False
+                    st.session_state.navigation_step_idx = 0
+                    st.rerun()
+                    
+        with confirm_col2:
+            st.metric(
+                label="Remaining Travel Distance",
+                value=f"{remaining_length_km:.2f} km"
+            )
+            st.metric(
+                label="Est. Time Remaining",
+                value=f"{remaining_time_min:.1f} mins"
+            )
+            
+    else:
+        # STANDARD PLANNER MODE
+        with confirm_col1:
+            st.markdown(f"You are currently analyzing the **{active_label}** route.")
+            st.markdown(f"• **Overall Difficulty Index**: {selected_metrics['avg_diff']:.2f} / 5.0 ({selected_metrics['label']})")
+            st.markdown(f"• **Total Travel Distance**: {selected_metrics['length_km']:.2f} km")
+            st.markdown(f"• **Estimated Travel Time**: {selected_metrics['time_min']:.1f} mins")
+            
+            choice_btn = st.button(f"🚗 Accept and Launch Turn-by-Turn Navigation ({active_label})", use_container_width=True)
+            if choice_btn:
+                st.session_state.navigation_active = True
+                st.session_state.navigation_step_idx = 0
+                st.session_state.navigation_route_name = active_label
+                st.toast("Launching Navigation Simulator...", icon="🚗")
+                st.rerun()
+                
+        with confirm_col2:
+            st.metric(
+                label="Overall Route Stress Score",
+                value=f"{selected_metrics['avg_diff']:.2f} / 5.0",
+                delta="Optimal Comfort" if "Comfort" in active_label else ("Non-Personalized" if "Shortest" in active_label else "Alternative Bypass"),
+                delta_color="normal" if "Comfort" in active_label else "off"
+            )
         
     # --- DETAILED SEGMENT ANALYSIS ---
     st.markdown("### 📋 Street-by-Street Route Stress Breakdown")
